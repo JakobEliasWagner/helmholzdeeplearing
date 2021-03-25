@@ -36,18 +36,6 @@ def pde(x, y):
     return dy_xx + (k ** 2) * y
 
 
-def boundary(x, on_boundary):
-    return on_boundary
-
-
-def func(x):
-    return np.zeros(x.shape)
-
-
-def sol(x):
-    return np.cos(k * x)
-
-
 curr_file_path = pathlib.Path(__file__)
 h5_file_path = curr_file_path.parent.joinpath('../../test_data/sol.h5')
 x_t, y_t = load_test_data(h5_file_path)
@@ -60,12 +48,12 @@ geom = dde.geometry.Interval(-1, 1)
 observe_y0 = dde.PointSetBC(x_t, y_t)
 
 bcs = [observe_y0]
-data = dde.data.PDE(geom, pde, bcs, num_domain=400, num_boundary=2, anchors=x_t)
+data = dde.data.PDE(geom, pde, bcs, num_domain=0, num_boundary=0, anchors=x_t)
 
 net = dde.maps.FNN([1] + [50] * 5 + [1], "tanh", "Glorot normal")
 
 model = dde.Model(data, net)
-model.compile("adam", lr=1e-3)
+model.compile("adam", lr=1e-3, loss_weights=[1, 100])
 
 h, t = model.train(epochs=int(1e+4))
 

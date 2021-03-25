@@ -11,8 +11,6 @@ import deepxde as dde
 from deepxde.backend import tf
 import sklearn.preprocessing
 
-k = 20
-
 
 def load_test_data(path_to_file: pathlib.Path):
     """
@@ -33,58 +31,49 @@ def pde(x, y):
     :return:
     """
     dy_xx = dde.grad.hessian(y, x, i=0, j=0)
-    return -(dy_xx + 6)
-
-
-def boundary(x, on_boundary):
-    return on_boundary
-
-
-def func(x):
-    return np.zeros(x.shape)
-
+    return -(-dy_xx - np.pi ** 2 * tf.sin(np.pi * x))
 
 def sol(x):
-    return 2 + x[0] ** 2 + 2 * x[1] ** 2
+    return np.sin(np.pi * x)
 
 
-curr_file_path = pathlib.Path(__file__)
-h5_file_path = curr_file_path.parent.joinpath('../../test_data/sol_poisson.h5')
-x_t, y_t, u_t = load_test_data(h5_file_path)
+if __name__ == "__main__":
+    FENICS_DATA = False
 
-# prepare training data
-scaler = sklearn.preprocessing.MinMaxScaler()
-u_t = scaler.fit_transform(u_t)
+    if FENICS_DATA:
+        curr_file_path = pathlib.Path(__file__)
+        h5_file_path = curr_file_path.parent.joinpath('../../test_data/sol_poisson.h5')
+        x_t, y_t, u_t = load_test_data(h5_file_path)
+    else:
+        x_t = np.linspace(-1, 1, 100)[:, None]
+        u_t = sol(x_t)
 
-geom = dde.geometry.Interval(-1, 1)
-observe_y0 = dde.PointSetBC(x_t, u_t)
+    # prepare training data
+    scaler = sklearn.preprocessing.MinMaxScaler()
+    u_t = scaler.fit_transform(u_t)
 
+    geom = dde.geometry.Interval(-1, 1)
+    observe_y0 = dde.PointSetBC(x_t, u_t)
 
-def func(x):
-    return 1 + x ** 2
+    bcs = [observe_y0]
+    data = dde.data.PDE(geom, pde, bcs, num_domain=400, num_boundary=2, anchors=x_t)
 
+    net = dde.maps.FNN([1] + [50] * 3 + [1], "tanh", "Glorot normal")
 
-bc1 = dde.DirichletBC(geom, func, lambda _, onboundary: onboundary)
+    model = dde.Model(data, net)
+    model.compile("adam", lr=1e-3, loss_weights=[1, 100])
 
-bcs = [observe_y0, bc1]
-data = dde.data.PDE(geom, pde, bcs, num_domain=400, num_boundary=2, anchors=x_t)
+    h, t = model.train(epochs=int(1e+4))
 
-net = dde.maps.FNN([1] + [50] * 5 + [1], "tanh", "Glorot normal")
+    dde.saveplot(h, t, issave=False, isplot=True)
 
-model = dde.Model(data, net)
-model.compile("adam", lr=1e-3)
+    x = geom.uniform_points(1000, True)
+    y = model.predict(x, operator=pde)
 
-h, t = model.train(epochs=int(1e+4))
+    y = scaler.inverse_transform(y)
+    u_t = scaler.inverse_transform(u_t)
 
-dde.saveplot(h, t, issave=False, isplot=True)
-
-x = geom.uniform_points(1000, True)
-y = model.predict(x, operator=pde)
-
-y = scaler.inverse_transform(y)
-u_t = scaler.inverse_transform(u_t)
-
-plt.figure()
-plt.plot(x, y, 'b')
-plt.plot(x_t, u_t, 'r*-')
-plt.show()
+    plt.figure()
+    plt.plot(x, y, 'b')
+    plt.plot(x_t, u_t, 'r*-')
+    plt.show()

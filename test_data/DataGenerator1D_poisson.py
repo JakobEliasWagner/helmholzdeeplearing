@@ -20,7 +20,7 @@ mesh = dolfinx.IntervalMesh(MPI.COMM_WORLD, 100, [-1, 1])
 V = dolfinx.FunctionSpace(mesh, ("CG", solver_deg))
 
 uD = dolfinx.Function(V)
-uD.interpolate(lambda x: 1 + x[0]**2 + 2 * x[1]**2)
+uD.interpolate(lambda x: np.sin(np.pi * x[0]))
 uD.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
 # Create facet to cell connectivity required to determine boundary facets
@@ -31,7 +31,8 @@ boundary_facets = np.where(np.array(dolfinx.cpp.mesh.compute_boundary_facets(mes
 boundary_dofs = dolfinx.fem.locate_dofs_topological(V, fdim, boundary_facets)
 bc = dolfinx.DirichletBC(uD, boundary_dofs)
 
-f = dolfinx.Constant(V, -6)
+f = dolfinx.Function(V)
+f.interpolate(lambda x: np.pi ** 2 * np.sin(np.pi * x[0]))
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
